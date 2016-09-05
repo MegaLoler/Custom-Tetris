@@ -1,0 +1,51 @@
+body
+{
+	margin: 0px;
+	padding: 0px;
+}
+
+#editor-view
+{
+	position: relative;
+	cursor: pointer;
+	user-select: none;
+	-moz-user-select: none;
+	-khtml-user-select: none;
+	-webkit-user-select: none;
+	-ms-user-select: none;
+}
+
+#game-view
+{
+	position: relative;
+}
+
+#editor
+{
+	margin: 0px;
+	padding: 0px;
+	width: 50%;
+	height: 50%;
+	float: left;
+	background-color: red;
+}
+
+#options
+{
+	margin: 0px;
+	padding: 0px;
+	width: 50%;
+	height: 50%;
+	float: left;
+	background-color: green;
+}
+
+#game
+{
+	margin: 0px;
+	padding: 0px;
+	width: 50%;
+	height: 100%;
+	float: right;
+	background-color: blue;
+}
