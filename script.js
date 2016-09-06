@@ -4,6 +4,17 @@
 // or generate a set of them based on number of tiles
 // ye
 
+// TODO
+// a proper set generate for all the unique possible n-tiles polyminos
+// proper rotations, with a general TRANSFORM function (not just cheap imitations)
+// proper falling (not just cheap sweeping!)
+// death
+// gravity
+// key configuration (and presets for qwerty / dvorak)
+// and HELP
+// work on the interface, make it look nice, and give things labels
+// probably a a good idea, it is, to make it look nicer than just flat squares
+
 // heres some interface configuration variables!
 var tile_size = 24; // how many pixels wide and high a tile should be
 var grid_thickness = 1; // how many pixels thick the grid should be
@@ -49,6 +60,16 @@ function Piece(width, height, color)
 
 	// pivot point for rotation
 	center_pivot(this);
+}
+
+// clone a piece
+function clone_piece(piece)
+{
+	var clone = new Piece(piece.width, piece.height, piece.color);
+	clone.map = piece.map.slice(0);
+	clone.pivot_x = piece.pivot_x;
+	clone.pivot_y = piece.pivot_y;
+	return clone;
 }
 
 // set a new center pivot
@@ -377,8 +398,332 @@ var editor_color;
 var editor_width;
 var editor_height;
 
+var game_view;
+var game_width;
+var game_height;
+var game_gravity;
+var game_lock_delay;
+var game_spawn_delay;
+
+var editor_context;
+var game_context;
+
 // some live interface variabes
 var selection_coordinates = null;
+var board = []; // bitmap of colors (or nulls), expressed here 1 dimensionally
+var hover_piece = null;
+var hover_x = 0;
+var hover_y = 0;
+
+// initialize a new board nd stuff
+function init_board()
+{
+	// create a new board, and setup the canvas
+	board = create_board();
+	game_view.width = tile_size * get_game_width() + grid_thickness;
+	game_view.height = tile_size * get_game_height() + grid_thickness;
+
+	// and then spawn an initial piece to get started!
+	spawn_piece();
+	
+	// and then render things
+	render_board(board);
+}
+
+// is this a legal placement for this piece?
+// that is, does it not overlap anything?
+// or collide with walls? (excluding the cieling)
+function is_position_valid(board, piece, blit_x, blit_y)
+{
+	for(var y = 0; y < piece.height; y++)
+	{
+		for(var x = 0; x < piece.width; x++)
+		{
+			var pixel = get_pixel(piece, x, y);
+			if(pixel)
+			{
+				var offset_x = x - piece.pivot_x;
+				var offset_y = y - piece.pivot_y;
+				var final_x = blit_x + offset_x;
+				var final_y = blit_y + offset_y;
+				var color = get_board_pixel(board, final_x, final_y);
+				if(color != null)
+				{
+					return false;
+				}
+				else if(!in_bounds(final_x, 0, get_game_width()))
+				{
+					return false;
+				}
+				else if(final_y >= get_game_height())
+				{
+					return false;
+				}
+			}
+		}
+	}
+	return true;
+}
+
+// impress the currently hovering piece (if any)
+function impress_piece()
+{
+	if(hover_piece != null)
+	{
+		board_blit_piece(board, hover_piece, hover_x, hover_y);
+		hover_piece = null;
+	}
+}
+
+// spawn a new hover_piece
+function spawn_piece()
+{
+	// get a piece to clone from the piece set
+	var piece = random_choice(piece_set);
+	hover_piece = clone_piece(piece);
+
+	// set the coordinates to spawn coordinates
+	hover_y = 0;
+	hover_x = Math.floor(get_game_width() / 2);
+}
+
+// impress and spawn and update screen!
+function spawn_and_impress_piece()
+{
+	// impress
+	impress_piece();
+
+	// spawn
+	spawn_piece();
+
+	// update the screen
+	render_board(board);
+}
+
+// try to move the hovering piece somewhere, return whether it succeeded
+function move_piece(x, y)
+{
+	if(is_position_valid(board, hover_piece, x, y))
+	{
+		hover_x = x;
+		hover_y = y;
+		render_board(board);
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+// some simple movements
+// move left once
+function move_left()
+{
+	return move_piece(hover_x - 1, hover_y);
+}
+
+// move right once
+function move_right()
+{
+	return move_piece(hover_x + 1, hover_y);
+}
+
+// move down
+function move_down()
+{
+	return move_piece(hover_x, hover_y + 1);
+}
+
+// rotate things
+function rotate_clockwise()
+{
+	// make a clone to be the rotated piece
+	var clone = clone_piece(hover_piece);
+
+	// swap the width and height
+	clone.width = hover_piece.height;
+	clone.height = hover_piece.width;
+
+	// rotate the pivot point
+	hover_center_x = (hover_piece.width - 1) / 2;
+	hover_center_y = (hover_piece.height - 1) / 2;
+	hover_pivot_offset_x = hover_piece.pivot_x - hover_center_x;
+	hover_pivot_offset_y = hover_piece.pivot_y - hover_center_y;
+	clone_center_x = (clone.width - 1) / 2;
+	clone_center_y = (clone.height - 1) / 2;
+	clone_pivot_offset_x = -hover_pivot_offset_y;
+	clone_pivot_offset_y = hover_pivot_offset_x;
+	clone.pivot_x = clone_center_x + clone_pivot_offset_x;
+	clone.pivot_y = clone_center_y + clone_pivot_offset_y;
+
+	// copy the map as rotated
+	for(var y = 0; y < clone.height; y++)
+	{
+		for(var x = 0; x < clone.width; x++)
+		{
+			// get this coordinate relative to the pivot
+			var offset_x = x - clone.pivot_x;
+			var offset_y = y - clone.pivot_y;
+			
+			// rotate this coordinate
+			var rotated_offset_x = offset_y;
+			var rotated_offset_y = -offset_x;
+
+			// relative to the pivot of the source
+			var coordinate_x = rotated_offset_x + hover_piece.pivot_x;
+			var coordinate_y = rotated_offset_y + hover_piece.pivot_y;
+
+			// get the pixel at this rotated coordinate from the source piece
+			var pixel = get_pixel(hover_piece, coordinate_x, coordinate_y);
+
+			// set this pixel as that
+			set_pixel(clone, x, y, pixel);
+		}
+	}
+
+	// check and see if this is legal
+	if(is_position_valid(board, clone, hover_x, hover_y))
+	{
+		// replace the current piece with the rotated clone
+		hover_piece = clone;
+
+		// and update the screen!
+		render_board(board);
+
+		// this works
+		return true;
+	}
+	else
+	{
+		// not valid!
+		return false;
+	}
+}
+
+// psuedo rotate counterclockwise
+function rotate_counter_clockwise()
+{
+	// just by doing a 270 :b
+	rotate_clockwise();
+	rotate_clockwise();
+	rotate_clockwise();
+}
+
+// and a pseudo 180
+function rotate_flip()
+{
+	// just by doing two 90s
+	// because its cheap coding
+	// but in the end we have to write these properly
+	rotate_clockwise();
+	rotate_clockwise();
+}
+
+// make the piece fall all the way down and lock it
+function fall()
+{
+	// sweep all the way down til ya cant no more
+	// this is the cheap coding way of doing it
+	// id rather not do this because it redraws the screen every time!
+	while(move_down()) {}
+
+	// then impress it and spawn anew;
+	spawn_and_impress_piece();
+}
+
+// render a single pixel / tile of a board
+function render_board_pixel(x, y, board, context)
+{
+	// get the appriate colors for this "pixel"
+	var pixel = get_board_pixel(board, x, y);
+	if(pixel == null)
+	{
+		var color = background_color;
+	}
+	else
+	{
+		var color = pixel;
+	}
+	
+	// and then fill nd stroke it
+	fill_tile(x, y, color, context);
+	stroke_tile(x, y, grid_color, context);
+}
+
+// draw the board
+function render_board(board)
+{
+	// copy the board to blit the hovering piece onto it
+	var board = board.slice(0);
+	if(hover_piece != null)
+	{
+		board_blit_piece(board, hover_piece, hover_x, hover_y);
+	}
+
+	// and then render the dang board :D
+	for (var y = 0; y < get_game_height(); y++)
+	{
+		for (var x = 0; x < get_game_width(); x++)
+		{
+			// render that pixel
+			render_board_pixel(x, y, board, game_context);
+		}	
+	}
+}
+
+// create an empty board
+function create_board()
+{
+	board = [];
+	for(var i = 0; i < get_game_width() * get_game_height(); i++)
+	{
+		board.push(null);
+	}
+	return board;
+}
+
+// get a "pixel" from a board
+function get_board_pixel(board, x, y)
+{
+	var index = x + y * get_game_width();
+	if(!in_bounds(index, 0, get_game_width() * get_game_height()))
+	{
+		return null;
+	}
+	else
+	{
+		return board[index];
+	}
+}
+
+// set a "pixel" from a board
+function set_board_pixel(board, x, y, value)
+{
+	var index = x + y * get_game_width();
+	board[index] = value;
+}
+
+// paste a piece onto the board at some location
+// puts the pivot point at blit x, y
+function board_blit_piece(board, piece, blit_x, blit_y)
+{
+	for(var y = 0; y < piece.height; y++)
+	{
+		for(var x = 0; x < piece.width; x++)
+		{
+			var color = get_pixel(piece, x, y) ? piece.color : null;
+			var offset_x = x - piece.pivot_x;
+			var offset_y = y - piece.pivot_y;
+			if(color != null)
+			{
+				set_board_pixel(board, blit_x + offset_x, blit_y + offset_y, color);
+			}
+		}
+	}
+}
+
+// 
 
 // clear a select
 function clear_select(element)
@@ -598,6 +943,47 @@ function editor_deselect(context)
 	selection_coordinates = null;
 }
 
+// this is where keydown events for the canvas are handled!!
+function on_key_down(event)
+{
+	console.log(event.keyCode);
+	// key left
+	if(event.keyCode == 37)
+	{
+		move_left();
+	}
+	// key right
+	else if(event.keyCode == 39)
+	{
+		move_right();
+	}
+	// key up
+	else if(event.keyCode == 38)
+	{
+		fall();
+	}
+	// key down
+	else if(event.keyCode == 40)
+	{
+		move_down();
+	}
+	// counter clockwise rotate
+	else if(event.keyCode == 186)
+	{
+		rotate_counter_clockwise();
+	}
+	// clockwise rotate
+	else if(event.keyCode == 81)
+	{
+		rotate_clockwise();
+	}
+	// flip
+	else if(event.keyCode == 69)
+	{
+		rotate_flip();
+	}
+}
+
 // the mouse was moved in the editor
 // so gotta update the grid for selection
 function on_mouse_move_editor(event)
@@ -719,18 +1105,51 @@ function update_editor()
 	editor_height.value = piece.height;
 }
 
+// these get game options from the interface
+function get_game_width()
+{
+	return parseInt(game_width.value);
+}
+
+function get_game_height()
+{
+	return parseInt(game_height.value);
+}
+
+function get_game_gravity()
+{
+	return parseFloat(game_gravity.value);
+}
+
+function get_game_lock_delay()
+{
+	return parseFloat(game_lock_delay.value);
+}
+
+function get_game_spawn_delay()
+{
+	return parseFloat(game_spawn_delay.value);
+}
+
 // initialize!!!!!!!
 function on_load()
 {
 	// get all the interface elements
 	editor_view = document.getElementById("editor-view");
-	editor_menu = document.getElementById("pieces");
-	editor_color = document.getElementById("color");
-	editor_width = document.getElementById("width");
-	editor_height = document.getElementById("height");
+	editor_menu = document.getElementById("editor-pieces");
+	editor_color = document.getElementById("editor-color");
+	editor_width = document.getElementById("editor-width");
+	editor_height = document.getElementById("editor-height");
+	game_view = document.getElementById("game-view");
+	game_width = document.getElementById("game-width");
+	game_height = document.getElementById("game-height");
+	game_gravity = document.getElementById("game-gravity");
+	game_lock_delay = document.getElementById("game-lock-delay");
+	game_spawn_delay = document.getElementById("game-spawn-delay");
 
 	// and get contexts
 	editor_context = editor_view.getContext("2d");
+	game_context = game_view.getContext("2d");
 
 	// and set up mouse events for the editor n stuff
 	editor_view.onmousemove = on_mouse_move_editor;
@@ -743,6 +1162,11 @@ function on_load()
 	editor_color.onchange = on_color_change;
 	editor_width.onchange = on_size_change;
 	editor_height.onchange = on_size_change;
+	game_width.onchange = init_board;
+	game_height.onchange = init_board;
+
+	// and keyboard events for the game
+	game_view.addEventListener("keydown", on_key_down, false);
 
 	// generate a simple set to start out with
 	piece_set = generate_set_with_tiles(5, 7);
@@ -752,6 +1176,9 @@ function on_load()
 
 	// andddddd update all the editor stuff real quick
 	update_editor();
+
+	// initialize the board
+	init_board();
 }
 
 document.addEventListener("DOMContentLoaded", on_load, false);

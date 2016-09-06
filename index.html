@@ -6,15 +6,21 @@
 	</head>
 	<body>
 		<div id="editor">
-			<select id="pieces"></select>
-			<input type="color" id="color">
-			<input type="number" id="width" min="1" max="5">
-			<input type="number" id="height" min="1" max="5">
+			<select id="editor-pieces"></select>
+			<input type="color" id="editor-color">
+			<input type="number" id="editor-width" min="1" max="5">
+			<input type="number" id="editor-height" min="1" max="5">
 			<canvas id="editor-view"></canvas>
 		</div>
 		<div id="game">
-			<canvas id="game-view"></canvas>
+			<canvas tabindex="1" id="game-view"></canvas>
 		</div>
-		<div id="options"></div>
+		<div id="options">
+			<input type="number" id="game-width" min="5" max="30" step="1" value="10">
+			<input type="number" id="game-height" min="10" max="50" step="1" value="20">
+			<input type="number" id="game-gravity" min="0" max="100" step="0.5" value="1">
+			<input type="number" id="game-lock-delay" min="0" max="5" step="0.1"  value="1">
+			<input type="number" id="game-spawn-delay" min="0" max="5" step="0.1" value="0.5">
+		</div>
 	</body>
 </html>
