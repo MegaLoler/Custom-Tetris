@@ -7,7 +7,10 @@
 // TODO
 // a proper set generate for all the unique possible n-tiles polyminos
 // better automatic pivot creation (by weight rather than center)
-//
+// rotating at the bottom pushes the pieces upwards if necessary
+// pause / unpasue
+// save your configuration
+// moving left and right at the bottom before locking delays the lock
 // scores
 // resize the board without regenerating it (abstract rezising map code)
 // piece queue + generator customization
