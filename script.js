@@ -8,9 +8,12 @@
 // a proper set generate for all the unique possible n-tiles polyminos
 // better automatic pivot creation (by weight rather than center)
 //
+// scores
+// resize the board without regenerating it (abstract rezising map code)
+// piece queue + generator customization
 // adding and remove pieces, and manual triggering generate sets
 // proper falling (not just cheap sweeping!)
-// proper rotations, with a general TRANSFORM function (not just cheap imitations)
+// cleanup DUPLICATE ROTATION CODE with GENERAL TRANSFORM functions
 // cleanup the gravity stuff....... make it either on or off....... explicitly....
 //
 // sound effects, and visual effects too!
@@ -704,23 +707,138 @@ function rotate_clockwise()
 	}
 }
 
-// psuedo rotate counterclockwise
+// yeah um, clean up all this DUPLACATE CODE
 function rotate_counter_clockwise()
 {
-	// just by doing a 270 :b
-	rotate_clockwise();
-	rotate_clockwise();
-	rotate_clockwise();
+	if(hover_piece != null)
+	{
+		// make a clone to be the rotated piece
+		var clone = clone_piece(hover_piece);
+
+		// swap the width and height
+		clone.width = hover_piece.height;
+		clone.height = hover_piece.width;
+
+		// rotate the pivot point
+		hover_center_x = (hover_piece.width - 1) / 2;
+		hover_center_y = (hover_piece.height - 1) / 2;
+		hover_pivot_offset_x = hover_piece.pivot_x - hover_center_x;
+		hover_pivot_offset_y = hover_piece.pivot_y - hover_center_y;
+		clone_center_x = (clone.width - 1) / 2;
+		clone_center_y = (clone.height - 1) / 2;
+		clone_pivot_offset_x = hover_pivot_offset_y;
+		clone_pivot_offset_y = -hover_pivot_offset_x;
+		clone.pivot_x = clone_center_x + clone_pivot_offset_x;
+		clone.pivot_y = clone_center_y + clone_pivot_offset_y;
+
+		// copy the map as rotated
+		for(var y = 0; y < clone.height; y++)
+		{
+			for(var x = 0; x < clone.width; x++)
+			{
+				// get this coordinate relative to the pivot
+				var offset_x = x - clone.pivot_x;
+				var offset_y = y - clone.pivot_y;
+
+				// rotate this coordinate
+				var rotated_offset_x = -offset_y;
+				var rotated_offset_y = offset_x;
+
+				// relative to the pivot of the source
+				var coordinate_x = rotated_offset_x + hover_piece.pivot_x;
+				var coordinate_y = rotated_offset_y + hover_piece.pivot_y;
+
+				// get the pixel at this rotated coordinate from the source piece
+				var pixel = get_pixel(hover_piece, coordinate_x, coordinate_y);
+
+				// set this pixel as that
+				set_pixel(clone, x, y, pixel);
+			}
+		}
+
+		// check and see if this is legal
+		if(is_position_valid(board, clone, hover_x, hover_y))
+		{
+			// replace the current piece with the rotated clone
+			hover_piece = clone;
+
+			// and update the screen!
+			render_board(board);
+
+			// this works
+			return true;
+		}
+		else
+		{
+			// not valid!
+			return false;
+		}
+	}
+	else
+	{
+		return false;
+	}
 }
 
-// and a pseudo 180
+// more duplicate code to CLEAN UP
 function rotate_flip()
 {
-	// just by doing two 90s
-	// because its cheap coding
-	// but in the end we have to write these properly
-	rotate_clockwise();
-	rotate_clockwise();
+	if(hover_piece != null)
+	{
+		// make a clone to be the rotated piece
+		var clone = clone_piece(hover_piece);
+
+		// rotate the pivot point
+		clone.pivot_x = (clone.width - 1) - hover_piece.pivot_x;
+		clone.pivot_y = (clone.height - 1) - hover_piece.pivot_y;
+
+		// copy the map as rotated
+		for(var y = 0; y < clone.height; y++)
+		{
+			for(var x = 0; x < clone.width; x++)
+			{
+				// get this coordinate relative to the pivot
+				var offset_x = x - clone.pivot_x;
+				var offset_y = y - clone.pivot_y;
+
+				// rotate this coordinate
+				var rotated_offset_x = -offset_x;
+				var rotated_offset_y = -offset_y;
+
+				// relative to the pivot of the source
+				var coordinate_x = rotated_offset_x + hover_piece.pivot_x;
+				var coordinate_y = rotated_offset_y + hover_piece.pivot_y;
+
+				// get the pixel at this rotated coordinate from the source piece
+				var pixel = get_pixel(hover_piece, coordinate_x, coordinate_y);
+
+				// set this pixel as that
+				set_pixel(clone, x, y, pixel);
+			}
+		}
+
+		// check and see if this is legal
+		if(is_position_valid(board, clone, hover_x, hover_y))
+		{
+			// replace the current piece with the rotated clone
+			hover_piece = clone;
+
+			// and update the screen!
+			render_board(board);
+
+			// this works
+			return true;
+		}
+		else
+		{
+			// not valid!
+			return false;
+		}
+	}
+	else
+	{
+		return false;
+	}
 }
 
 // make the piece fall all the way down and lock it
@@ -1086,7 +1204,6 @@ function editor_deselect(context)
 // this is where keydown events for the canvas are handled!!
 function on_key_down(event)
 {
-	console.log(event.keyCode);
 	if(event.keyCode == key_config.left)
 	{
 		move_left();

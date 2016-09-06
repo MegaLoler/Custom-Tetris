@@ -2,6 +2,7 @@ body
 {
 	margin: 0px;
 	padding: 0px;
+	font-family: sans;
 }
 
 #editor-view
@@ -27,7 +28,6 @@ body
 	width: 50%;
 	height: 50%;
 	float: left;
-	background-color: red;
 }
 
 #options
@@ -37,7 +37,6 @@ body
 	width: 50%;
 	height: 50%;
 	float: left;
-	background-color: green;
 }
 
 #game
@@ -47,5 +46,4 @@ body
 	width: 50%;
 	height: 100%;
 	float: right;
-	background-color: blue;
 }
