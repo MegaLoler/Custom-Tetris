@@ -6,13 +6,16 @@
 
 // TODO
 // a proper set generate for all the unique possible n-tiles polyminos
-// proper rotations, with a general TRANSFORM function (not just cheap imitations)
+// better automatic pivot creation (by weight rather than center)
+//
+// adding and remove pieces, and manual triggering generate sets
 // proper falling (not just cheap sweeping!)
-// death
-// gravity
-// key configuration (and presets for qwerty / dvorak)
-// and HELP
+// proper rotations, with a general TRANSFORM function (not just cheap imitations)
+// cleanup the gravity stuff....... make it either on or off....... explicitly....
+//
+// sound effects, and visual effects too!
 // work on the interface, make it look nice, and give things labels
+// display an outline around the hover piece so you know its still hovering
 // probably a a good idea, it is, to make it look nicer than just flat squares
 
 // heres some interface configuration variables!
@@ -414,6 +417,26 @@ var board = []; // bitmap of colors (or nulls), expressed here 1 dimensionally
 var hover_piece = null;
 var hover_x = 0;
 var hover_y = 0;
+var gravity_timeout = null;
+
+// key configuration n stuff
+function KeyConfig(config_name, left, right, down, fall, spin_right, spin_left, flip)
+{
+	this.config_name = config_name;
+	this.left = left;
+	this.right = right;
+	this.down = down;
+	this.fall = fall;
+	this.spin_right = spin_right;
+	this.spin_left = spin_left;
+	this.flip = flip;
+}
+
+// presets
+var key_config_qwerty = new KeyConfig("QWERTY", 37, 39, 40, 38, 88, 90, 68);
+var key_config_dvorak = new KeyConfig("Dvorak", 37, 39, 40, 38, 81, 186, 69);
+var key_config_presets = [key_config_qwerty, key_config_dvorak];
+var key_config = key_config_qwerty;
 
 // initialize a new board nd stuff
 function init_board()
@@ -473,6 +496,7 @@ function impress_piece()
 		board_blit_piece(board, hover_piece, hover_x, hover_y);
 		hover_piece = null;
 	}
+	clear_lines();
 }
 
 // spawn a new hover_piece
@@ -485,6 +509,12 @@ function spawn_piece()
 	// set the coordinates to spawn coordinates
 	hover_y = 0;
 	hover_x = Math.floor(get_game_width() / 2);
+
+	// if its already an invalid placement, then you die :O
+	if(!is_position_valid(board, hover_piece, hover_x, hover_y))
+	{
+		die();
+	}
 }
 
 // impress and spawn and update screen!
@@ -500,15 +530,76 @@ function spawn_and_impress_piece()
 	render_board(board);
 }
 
+// is this row full?
+function is_row_filled(row)
+{
+	for(var x = 0; x < get_game_width(); x++)
+	{
+		if(!get_board_pixel(board, x, row))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+// move all the pixels downards up to a certain row
+// (for clearing lines)
+function shift_down_to_row(row)
+{
+	for(var y = row; y >= 0; y--)
+	{
+		for(var x = 0; x < get_game_width(); x++)
+		{
+			var pixel;
+			if(y == 0)
+			{
+				pixel = null;
+			}
+			else
+			{
+				pixel = get_board_pixel(board, x, y - 1);
+			}
+			set_board_pixel(board, x, y, pixel);
+		}
+	}
+}
+
+// clear any rows that are filled!
+function clear_lines()
+{
+	// go down all the rows to find ones to remove
+	for(var y = 0; y < get_game_height(); y++)
+	{
+		if(is_row_filled(y))
+		{
+			shift_down_to_row(y);
+		}
+	}
+}
+
+// this is when u die
+function die()
+{
+	init_board();
+}
+
 // try to move the hovering piece somewhere, return whether it succeeded
 function move_piece(x, y)
 {
-	if(is_position_valid(board, hover_piece, x, y))
+	if(hover_piece != null)
 	{
-		hover_x = x;
-		hover_y = y;
-		render_board(board);
-		return true;
+		if(is_position_valid(board, hover_piece, x, y))
+		{
+			hover_x = x;
+			hover_y = y;
+			render_board(board);
+			return true;
+		}
+		else
+		{
+			return false;
+		}
 	}
 	else
 	{
@@ -532,71 +623,83 @@ function move_right()
 // move down
 function move_down()
 {
-	return move_piece(hover_x, hover_y + 1);
+	var success = move_piece(hover_x, hover_y + 1);
+	if(success && gravity_timeout != null)
+	{
+		queue_gravity();
+	}
+	return success;
 }
 
 // rotate things
 function rotate_clockwise()
 {
-	// make a clone to be the rotated piece
-	var clone = clone_piece(hover_piece);
-
-	// swap the width and height
-	clone.width = hover_piece.height;
-	clone.height = hover_piece.width;
-
-	// rotate the pivot point
-	hover_center_x = (hover_piece.width - 1) / 2;
-	hover_center_y = (hover_piece.height - 1) / 2;
-	hover_pivot_offset_x = hover_piece.pivot_x - hover_center_x;
-	hover_pivot_offset_y = hover_piece.pivot_y - hover_center_y;
-	clone_center_x = (clone.width - 1) / 2;
-	clone_center_y = (clone.height - 1) / 2;
-	clone_pivot_offset_x = -hover_pivot_offset_y;
-	clone_pivot_offset_y = hover_pivot_offset_x;
-	clone.pivot_x = clone_center_x + clone_pivot_offset_x;
-	clone.pivot_y = clone_center_y + clone_pivot_offset_y;
-
-	// copy the map as rotated
-	for(var y = 0; y < clone.height; y++)
+	if(hover_piece != null)
 	{
-		for(var x = 0; x < clone.width; x++)
+		// make a clone to be the rotated piece
+		var clone = clone_piece(hover_piece);
+
+		// swap the width and height
+		clone.width = hover_piece.height;
+		clone.height = hover_piece.width;
+
+		// rotate the pivot point
+		hover_center_x = (hover_piece.width - 1) / 2;
+		hover_center_y = (hover_piece.height - 1) / 2;
+		hover_pivot_offset_x = hover_piece.pivot_x - hover_center_x;
+		hover_pivot_offset_y = hover_piece.pivot_y - hover_center_y;
+		clone_center_x = (clone.width - 1) / 2;
+		clone_center_y = (clone.height - 1) / 2;
+		clone_pivot_offset_x = -hover_pivot_offset_y;
+		clone_pivot_offset_y = hover_pivot_offset_x;
+		clone.pivot_x = clone_center_x + clone_pivot_offset_x;
+		clone.pivot_y = clone_center_y + clone_pivot_offset_y;
+
+		// copy the map as rotated
+		for(var y = 0; y < clone.height; y++)
 		{
-			// get this coordinate relative to the pivot
-			var offset_x = x - clone.pivot_x;
-			var offset_y = y - clone.pivot_y;
-			
-			// rotate this coordinate
-			var rotated_offset_x = offset_y;
-			var rotated_offset_y = -offset_x;
+			for(var x = 0; x < clone.width; x++)
+			{
+				// get this coordinate relative to the pivot
+				var offset_x = x - clone.pivot_x;
+				var offset_y = y - clone.pivot_y;
 
-			// relative to the pivot of the source
-			var coordinate_x = rotated_offset_x + hover_piece.pivot_x;
-			var coordinate_y = rotated_offset_y + hover_piece.pivot_y;
+				// rotate this coordinate
+				var rotated_offset_x = offset_y;
+				var rotated_offset_y = -offset_x;
 
-			// get the pixel at this rotated coordinate from the source piece
-			var pixel = get_pixel(hover_piece, coordinate_x, coordinate_y);
+				// relative to the pivot of the source
+				var coordinate_x = rotated_offset_x + hover_piece.pivot_x;
+				var coordinate_y = rotated_offset_y + hover_piece.pivot_y;
 
-			// set this pixel as that
-			set_pixel(clone, x, y, pixel);
+				// get the pixel at this rotated coordinate from the source piece
+				var pixel = get_pixel(hover_piece, coordinate_x, coordinate_y);
+
+				// set this pixel as that
+				set_pixel(clone, x, y, pixel);
+			}
 		}
-	}
 
-	// check and see if this is legal
-	if(is_position_valid(board, clone, hover_x, hover_y))
-	{
-		// replace the current piece with the rotated clone
-		hover_piece = clone;
+		// check and see if this is legal
+		if(is_position_valid(board, clone, hover_x, hover_y))
+		{
+			// replace the current piece with the rotated clone
+			hover_piece = clone;
 
-		// and update the screen!
-		render_board(board);
+			// and update the screen!
+			render_board(board);
 
-		// this works
-		return true;
+			// this works
+			return true;
+		}
+		else
+		{
+			// not valid!
+			return false;
+		}
 	}
 	else
 	{
-		// not valid!
 		return false;
 	}
 }
@@ -623,13 +726,26 @@ function rotate_flip()
 // make the piece fall all the way down and lock it
 function fall()
 {
-	// sweep all the way down til ya cant no more
-	// this is the cheap coding way of doing it
-	// id rather not do this because it redraws the screen every time!
-	while(move_down()) {}
+	if(hover_piece != null)
+	{
+		// sweep all the way down til ya cant no more
+		// this is the cheap coding way of doing it
+		// id rather not do this because it redraws the screen every time!
+		while(move_down()) {}
 
-	// then impress it and spawn anew;
-	spawn_and_impress_piece();
+		// then impress it and queue a new spawn
+		impress_piece();
+		render_board(board);
+		if(gravity_timeout)
+		{
+			stop_gravity();
+			gravity_timeout = setTimeout(gravity_spawn, 1000 * get_game_spawn_delay());
+		}
+		else
+		{
+			setTimeout(function() { spawn_piece(); render_board(board); }, 1000 * get_game_spawn_delay());
+		}
+	}
 }
 
 // render a single pixel / tile of a board
@@ -750,6 +866,30 @@ function populate_piece_menu()
 		editor_menu.appendChild(option);
 		index++;
 	}
+}
+
+// populate the key config menu
+// who'da thunk it
+function populate_key_config_menu()
+{
+	// yeah empty make sure
+	clear_select(key_config_menu);
+
+	// and then stuff it with junk of course
+	for(i in key_config_presets)
+	{
+		var config = key_config_presets[i];
+		var option = document.createElement("option");
+		option.value = config;
+		option.innerHTML = config.config_name;
+		key_config_menu.appendChild(option);
+	}
+}
+
+// the key config was changed
+function on_change_key_config()
+{
+	key_config = key_config_presets[key_config_menu.selectedIndex];
 }
 
 // get the currently selected piece to show up in the editor nd stuff
@@ -947,38 +1087,31 @@ function editor_deselect(context)
 function on_key_down(event)
 {
 	console.log(event.keyCode);
-	// key left
-	if(event.keyCode == 37)
+	if(event.keyCode == key_config.left)
 	{
 		move_left();
 	}
-	// key right
-	else if(event.keyCode == 39)
+	else if(event.keyCode == key_config.right)
 	{
 		move_right();
 	}
-	// key up
-	else if(event.keyCode == 38)
+	else if(event.keyCode == key_config.fall)
 	{
 		fall();
 	}
-	// key down
-	else if(event.keyCode == 40)
+	else if(event.keyCode == key_config.down)
 	{
 		move_down();
 	}
-	// counter clockwise rotate
-	else if(event.keyCode == 186)
+	else if(event.keyCode == key_config.spin_left)
 	{
 		rotate_counter_clockwise();
 	}
-	// clockwise rotate
-	else if(event.keyCode == 81)
+	else if(event.keyCode == key_config.spin_right)
 	{
 		rotate_clockwise();
 	}
-	// flip
-	else if(event.keyCode == 69)
+	else if(event.keyCode == key_config.flip)
 	{
 		rotate_flip();
 	}
@@ -1105,6 +1238,60 @@ function update_editor()
 	editor_height.value = piece.height;
 }
 
+// gravity stuff!!
+// (re)start the gravity interval
+// this is where gravity does its stuff
+function gravity()
+{
+	// try to move down and see what happens!
+	if(!move_down())
+	{
+		// hey, it didn't work, so....... 
+		// wait for the lock delay... and then do a gravity lock!
+		stop_gravity();
+		gravity_timeout = setTimeout(gravity_lock, 1000 * get_game_lock_delay());
+	}
+}
+
+// queue a gravity timeout
+function queue_gravity()
+{
+	stop_gravity();
+	gravity_timeout = setTimeout(gravity, 1000 / get_game_gravity());
+}
+
+// this is where gravity locks the piece and spawns a new one
+// but first it checks once more to see if it can fall....
+function gravity_lock()
+{
+	if(!move_down())
+	{
+		stop_gravity();
+		impress_piece();
+		render_board(board);
+		gravity_timeout = setTimeout(gravity_spawn, 1000 * get_game_spawn_delay());
+	}
+}
+
+// this is where gravity spawns a new one and keeps going
+function gravity_spawn()
+{
+	stop_gravity();
+	spawn_piece();
+	render_board(board);
+	queue_gravity();
+}
+
+// stop the gravity interval
+function stop_gravity()
+{
+	if(gravity_timeout != null)
+	{
+		clearTimeout(gravity_timeout);
+		gravity_timeout = null;
+	}
+}
+
 // these get game options from the interface
 function get_game_width()
 {
@@ -1146,6 +1333,9 @@ function on_load()
 	game_gravity = document.getElementById("game-gravity");
 	game_lock_delay = document.getElementById("game-lock-delay");
 	game_spawn_delay = document.getElementById("game-spawn-delay");
+	game_start_gravity = document.getElementById("game-start-gravity");
+	game_stop_gravity = document.getElementById("game-stop-gravity");
+	key_config_menu = document.getElementById("key-config");
 
 	// and get contexts
 	editor_context = editor_view.getContext("2d");
@@ -1164,6 +1354,12 @@ function on_load()
 	editor_height.onchange = on_size_change;
 	game_width.onchange = init_board;
 	game_height.onchange = init_board;
+	game_gravity.onchange = queue_gravity;
+	game_lock_delay.onchange = queue_gravity;
+	game_spawn_delay.onchange = queue_gravity;
+	game_start_gravity.onclick = queue_gravity;
+	game_stop_gravity.onclick = stop_gravity;
+	key_config_menu.onchange = on_change_key_config;
 
 	// and keyboard events for the game
 	game_view.addEventListener("keydown", on_key_down, false);
@@ -1177,8 +1373,14 @@ function on_load()
 	// andddddd update all the editor stuff real quick
 	update_editor();
 
+	// populate the key configs menuuu
+	populate_key_config_menu();
+
 	// initialize the board
 	init_board();
+
+	// start up gravityyyyyyyy
+	queue_gravity();
 }
 
 document.addEventListener("DOMContentLoaded", on_load, false);

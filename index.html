@@ -8,19 +8,46 @@
 		<div id="editor">
 			<select id="editor-pieces"></select>
 			<input type="color" id="editor-color">
-			<input type="number" id="editor-width" min="1" max="5">
-			<input type="number" id="editor-height" min="1" max="5">
+			<br>
+			<label for="editor-width">Width</label>
+			<input type="number" id="editor-width" min="1" max="10">
+			<br>
+			<label for="editor-height">Height</label>
+			<input type="number" id="editor-height" min="1" max="10">
+			<hr>
 			<canvas id="editor-view"></canvas>
 		</div>
 		<div id="game">
 			<canvas tabindex="1" id="game-view"></canvas>
 		</div>
 		<div id="options">
+			<label for="game-width">Board Width</label>
 			<input type="number" id="game-width" min="5" max="30" step="1" value="10">
+			<br>
+			<label for="game-height">Board Height</label>
 			<input type="number" id="game-height" min="10" max="50" step="1" value="20">
-			<input type="number" id="game-gravity" min="0" max="100" step="0.5" value="1">
-			<input type="number" id="game-lock-delay" min="0" max="5" step="0.1"  value="1">
+			<br>
+			<label for="game-gravity">Gravity (ticks/second)</label>
+			<input type="number" id="game-gravity" min="0" max="100" step="1" value="3">
+			<br>
+			<label for="game-lock-delay">Lock Delay (seconds)</label>
+			<input type="number" id="game-lock-delay" min="0" max="5" step="0.1"  value="0.5">
+			<br>
+			<label for="game-spawn-delay">Spawn Delay (seconds)</label>
 			<input type="number" id="game-spawn-delay" min="0" max="5" step="0.1" value="0.5">
+			<br>
+			<button id="game-start-gravity">Start Gravity</button>
+			<button id="game-stop-gravity">Stop Gravity</button>
+			<hr>
+			<label for="key-config">Key Configuration</select>
+			<select id="key-config"></select>
+			<p>
+				Controls (QWERTY):<br>
+				Left / Right / Down -- Move<br>
+				Up -- Instant Fall and Lock<br>
+				Z / X -- Spin<br>
+				D -- Flip<br>
+			</p>
 		</div>
 	</body>
 </html>
