@@ -47,3 +47,8 @@ body
 	height: 100%;
 	float: right;
 }
+
+#footer
+{
+	font-size: small;
+}

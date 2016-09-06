@@ -980,7 +980,7 @@ function populate_piece_menu()
 	{
 		var option = document.createElement("option");
 		option.value = index;
-		option.innerHTML = "Piece #" + index;
+		option.innerHTML = "Piece #" + (index + 1);
 		editor_menu.appendChild(option);
 		index++;
 	}
@@ -1452,6 +1452,7 @@ function on_load()
 	game_spawn_delay = document.getElementById("game-spawn-delay");
 	game_start_gravity = document.getElementById("game-start-gravity");
 	game_stop_gravity = document.getElementById("game-stop-gravity");
+	game_reset = document.getElementById("game-reset");
 	key_config_menu = document.getElementById("key-config");
 
 	// and get contexts
@@ -1476,6 +1477,7 @@ function on_load()
 	game_spawn_delay.onchange = queue_gravity;
 	game_start_gravity.onclick = queue_gravity;
 	game_stop_gravity.onclick = stop_gravity;
+	game_reset.onclick = init_board;
 	key_config_menu.onchange = on_change_key_config;
 
 	// and keyboard events for the game
